@@ -162,16 +162,17 @@ static void load_register_parameters (struct arg_data *, int, rtx *, int,
 static rtx emit_library_call_value_1 (int, rtx, rtx, enum libcall_type,
 				      machine_mode, int, va_list);
 static int special_function_p (const_tree, int);
-static int check_sibcall_argument_overlap_1 (rtx);
-static int check_sibcall_argument_overlap (rtx_insn *, struct arg_data *, int);
+static int check_sibcall_argument_overlap_1 (rtx, bool);
+static int check_sibcall_argument_overlap (rtx_insn *, struct arg_data *, int,
+					   bool);
 
 static int combine_pending_stack_adjustment_and_call (int, struct args_size *,
 						      unsigned int);
 static tree split_complex_types (tree);
 
 #ifdef REG_PARM_STACK_SPACE
-static rtx save_fixed_argument_area (int, rtx, int *, int *);
-static void restore_fixed_argument_area (rtx, rtx, int, int);
+static rtx save_fixed_argument_area (int, rtx, int *, int *, bool);
+static void restore_fixed_argument_area (rtx, rtx, int, int, bool);
 #endif
 
 /* Force FUNEXP into a form suitable for the address of a CALL,
@@ -744,6 +745,12 @@ flags_from_decl_or_type (const_tree exp)
 
   if (DECL_P (exp))
     {
+      if (FUNCTION_PUSH_ARGS_REVERSED (TREE_TYPE (exp)))
+	flags |= ECF_PUSH_ARGS_REVERSED;
+
+      if (FUNCTION_ARGS_GROW_DOWNWARD (TREE_TYPE (exp)))
+	flags |= ECF_ARGS_GROW_DOWNWARD;
+
       /* The function exp may have the `malloc' attribute.  */
       if (DECL_IS_MALLOC (exp))
 	flags |= ECF_MALLOC;
@@ -782,6 +789,12 @@ flags_from_decl_or_type (const_tree exp)
     }
   else if (TYPE_P (exp))
     {
+      if (FUNCTION_PUSH_ARGS_REVERSED (exp))
+	flags |= ECF_PUSH_ARGS_REVERSED;
+
+      if (FUNCTION_ARGS_GROW_DOWNWARD (exp))
+	flags |= ECF_ARGS_GROW_DOWNWARD;
+
       if (TYPE_READONLY (exp))
 	flags |= ECF_CONST;
 
@@ -954,14 +967,16 @@ precompute_register_parameters (int num_actuals, struct arg_data *args,
      parameters, we must save and restore it.  */
 
 static rtx
-save_fixed_argument_area (int reg_parm_stack_space, rtx argblock, int *low_to_save, int *high_to_save)
+save_fixed_argument_area (int reg_parm_stack_space, rtx argblock,
+			  int *low_to_save, int *high_to_save,
+			  bool args_grow_downward)
 {
   int low;
   int high;
 
   /* Compute the boundary of the area that needs to be saved, if any.  */
   high = reg_parm_stack_space;
-  if (ARGS_GROW_DOWNWARD)
+  if (args_grow_downward)
     high += 1;
 
   if (high > highest_outgoing_arg_in_use)
@@ -992,7 +1007,7 @@ save_fixed_argument_area (int reg_parm_stack_space, rtx argblock, int *low_to_sa
 			 BIGGEST_ALIGNMENT / UNITS_PER_WORD) - 1)))
 	  save_mode = BLKmode;
 
-	if (ARGS_GROW_DOWNWARD)
+	if (args_grow_downward)
 	  delta = -high;
 	else
 	  delta = low;
@@ -1020,13 +1035,15 @@ save_fixed_argument_area (int reg_parm_stack_space, rtx argblock, int *low_to_sa
 }
 
 static void
-restore_fixed_argument_area (rtx save_area, rtx argblock, int high_to_save, int low_to_save)
+restore_fixed_argument_area (rtx save_area, rtx argblock,
+			     int high_to_save, int low_to_save,
+			     bool args_grow_downward)
 {
   machine_mode save_mode = GET_MODE (save_area);
   int delta;
   rtx addr, stack_area;
 
-  if (ARGS_GROW_DOWNWARD)
+  if (args_grow_downward)
     delta = -high_to_save;
   else
     delta = low_to_save;
@@ -1172,6 +1189,8 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
 {
   CUMULATIVE_ARGS *args_so_far_pnt = get_cumulative_args (args_so_far);
   location_t loc = EXPR_LOCATION (exp);
+  /* 1 if scanning parms front to back, -1 if scanning back to front.  */
+  int inc;
 
   /* Count arg position in order args appear.  */
   int argpos;
@@ -1184,9 +1203,22 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
   bitmap_obstack_initialize (NULL);
 
   /* In this loop, we consider args in the order they are written.
-     We fill up ARGS from the back.  */
+     We fill up ARGS from the front or from the back if necessary
+     so that in any case the first arg to be pushed ends up at the front.  */
 
-  i = num_actuals - 1;
+  if (FUNCTION_PUSH_ARGS_REVERSED (fntype))
+    {
+      i = num_actuals - 1, inc = -1;
+      /* In this case, must reverse order of args
+	 so that we compute and push the last arg first.  */
+    }
+  else
+    {
+      i = 0, inc = 1;
+    }
+
+  /* First fill in the actual arguments in the ARGS array, splitting
+     complex arguments if necessary.  */
   {
     int j = i, ptr_arg = -1;
     call_expr_arg_iterator iter;
@@ -1196,7 +1228,7 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
     if (struct_value_addr_value)
       {
 	args[j].tree_value = struct_value_addr_value;
-	j--;
+	j += inc;
 
 	/* If we pass structure address then we need to
 	   create bounds for it.  Since created bounds is
@@ -1209,8 +1241,8 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
 	      = chkp_make_bounds_for_struct_addr (struct_value_addr_value);
 	    expand_expr_real (args[j].tree_value, args[j].value, VOIDmode,
 			      EXPAND_NORMAL, 0, false);
-	    args[j].pointer_arg = j + 1;
-	    j--;
+	    args[j].pointer_arg = j - inc;
+	    j += inc;
 	  }
       }
     argpos = 0;
@@ -1277,12 +1309,12 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
 	  {
 	    tree subtype = TREE_TYPE (argtype);
 	    args[j].tree_value = build1 (REALPART_EXPR, subtype, arg);
-	    j--;
+	    j += inc;
 	    args[j].tree_value = build1 (IMAGPART_EXPR, subtype, arg);
 	  }
 	else
 	  args[j].tree_value = arg;
-	j--;
+	j += inc;
 	argpos++;
       }
 
@@ -1293,7 +1325,7 @@ initialize_argument_information (int num_actuals ATTRIBUTE_UNUSED,
   bitmap_obstack_release (NULL);
 
   /* I counts args in order (to be) pushed; ARGPOS counts in order written.  */
-  for (argpos = 0; argpos < num_actuals; i--, argpos++)
+  for (argpos = 0; argpos < num_actuals; i += inc, argpos++)
     {
       tree type = TREE_TYPE (args[i].tree_value);
       int unsignedp;
@@ -1983,7 +2015,8 @@ internal_arg_pointer_based_exp (const_rtx rtl, bool toplevel)
    sibcall.  */
 
 static bool
-mem_overlaps_already_clobbered_arg_p (rtx addr, unsigned HOST_WIDE_INT size)
+mem_overlaps_already_clobbered_arg_p (rtx addr, unsigned HOST_WIDE_INT size,
+				      bool args_grow_downward)
 {
   HOST_WIDE_INT i;
   rtx val;
@@ -2004,7 +2037,7 @@ mem_overlaps_already_clobbered_arg_p (rtx addr, unsigned HOST_WIDE_INT size)
     i += crtl->args.pretend_args_size;
 
 
-  if (ARGS_GROW_DOWNWARD)
+  if (args_grow_downward)
     i = -i - size;
 
   if (size > 0)
@@ -2114,13 +2147,14 @@ load_register_parameters (struct arg_data *args, int num_actuals,
 	  else if (partial == 0 || args[i].pass_on_stack)
 	    {
 	      rtx mem = validize_mem (copy_rtx (args[i].value));
+	      bool args_grow_downward = (flags & ECF_ARGS_GROW_DOWNWARD) != 0;
 
 	      /* Check for overlap with already clobbered argument area,
 	         providing that this has non-zero size.  */
 	      if (is_sibcall
 		  && size != 0
 		  && (mem_overlaps_already_clobbered_arg_p
-		      (XEXP (args[i].value, 0), size)))
+		      (XEXP (args[i].value, 0), size, args_grow_downward)))
 		*sibcall_failure = 1;
 
 	      if (size % UNITS_PER_WORD == 0
@@ -2168,7 +2202,9 @@ load_register_parameters (struct arg_data *args, int num_actuals,
 	     possible that it did a load from an argument slot that was
 	     already clobbered.  */
 	  if (is_sibcall
-	      && check_sibcall_argument_overlap (before_arg, &args[i], 0))
+	      && check_sibcall_argument_overlap
+		   (before_arg, &args[i], 0,
+		    (flags & ECF_ARGS_GROW_DOWNWARD) != 0))
 	    *sibcall_failure = 1;
 
 	  /* Handle calls that pass values in multiple non-contiguous
@@ -2247,7 +2283,7 @@ combine_pending_stack_adjustment_and_call (int unadjusted_args_size,
    zero otherwise.  */
 
 static int
-check_sibcall_argument_overlap_1 (rtx x)
+check_sibcall_argument_overlap_1 (rtx x, bool args_grow_downward)
 {
   RTX_CODE code;
   int i, j;
@@ -2264,7 +2300,8 @@ check_sibcall_argument_overlap_1 (rtx x)
 
   if (code == MEM)
     return mem_overlaps_already_clobbered_arg_p (XEXP (x, 0),
-						 GET_MODE_SIZE (GET_MODE (x)));
+						 GET_MODE_SIZE (GET_MODE (x)),
+						 args_grow_downward);
 
   /* Scan all subexpressions.  */
   fmt = GET_RTX_FORMAT (code);
@@ -2272,13 +2309,15 @@ check_sibcall_argument_overlap_1 (rtx x)
     {
       if (*fmt == 'e')
 	{
-	  if (check_sibcall_argument_overlap_1 (XEXP (x, i)))
+	  if (check_sibcall_argument_overlap_1 (XEXP (x, i),
+						args_grow_downward))
 	    return 1;
 	}
       else if (*fmt == 'E')
 	{
 	  for (j = 0; j < XVECLEN (x, i); j++)
-	    if (check_sibcall_argument_overlap_1 (XVECEXP (x, i, j)))
+	    if (check_sibcall_argument_overlap_1 (XVECEXP (x, i, j),
+						  args_grow_downward))
 	      return 1;
 	}
     }
@@ -2294,7 +2333,8 @@ check_sibcall_argument_overlap_1 (rtx x)
 
 static int
 check_sibcall_argument_overlap (rtx_insn *insn, struct arg_data *arg,
-				int mark_stored_args_map)
+				int mark_stored_args_map,
+				bool args_grow_downward)
 {
   int low, high;
 
@@ -2305,12 +2345,13 @@ check_sibcall_argument_overlap (rtx_insn *insn, struct arg_data *arg,
 
   for (; insn; insn = NEXT_INSN (insn))
     if (INSN_P (insn)
-	&& check_sibcall_argument_overlap_1 (PATTERN (insn)))
+	&& check_sibcall_argument_overlap_1 (PATTERN (insn),
+					     args_grow_downward))
       break;
 
   if (mark_stored_args_map)
     {
-      if (ARGS_GROW_DOWNWARD)
+      if (args_grow_downward)
 	low = -arg->locate.slot_offset.constant - arg->locate.size.constant;
       else
 	low = arg->locate.slot_offset.constant;
@@ -2398,6 +2439,10 @@ expand_call (tree exp, rtx target, int ignore)
   tree fntype;
   bool try_tail_call = CALL_EXPR_TAILCALL (exp);
   int pass;
+  /* Whether arguments are pushed from last to first.  */
+  bool push_args_reversed;
+  /* Whether successive arguments occupy decreasing stack addresses.  */
+  bool args_grow_downward;
 
   /* Register in which non-BLKmode value will be returned,
      or 0 if no value or if value is BLKmode.  */
@@ -2517,6 +2562,9 @@ expand_call (tree exp, rtx target, int ignore)
       flags |= flags_from_decl_or_type (fntype);
     }
   rettype = TREE_TYPE (exp);
+
+  push_args_reversed = !! FUNCTION_PUSH_ARGS_REVERSED (fntype);
+  args_grow_downward = !! FUNCTION_ARGS_GROW_DOWNWARD (fntype);
 
   struct_value = targetm.calls.struct_value_rtx (fntype, 0);
 
@@ -2801,6 +2849,10 @@ expand_call (tree exp, rtx target, int ignore)
 	  != targetm.calls.return_pops_args (current_function_decl,
 					     TREE_TYPE (current_function_decl),
 					     crtl->args.size))
+      /* Sibcalls do not work yet when the caller and callee lay out
+	 arguments in different directions.  -- tkchia 20210513 */
+      || cfun->args_grow_downward
+	 != (!! FUNCTION_ARGS_GROW_DOWNWARD (funtype))
       || !lang_hooks.decls.ok_for_sibcall (fndecl))
     try_tail_call = 0;
 
@@ -2998,7 +3050,7 @@ expand_call (tree exp, rtx target, int ignore)
 		  if (! OUTGOING_REG_PARM_STACK_SPACE ((!fndecl ? fntype : TREE_TYPE (fndecl))))
 		    needed += reg_parm_stack_space;
 
-		  if (ARGS_GROW_DOWNWARD)
+		  if (args_grow_downward)
 		    highest_outgoing_arg_in_use
 		      = MAX (initial_highest_arg_in_use, needed + 1);
 		  else
@@ -3066,7 +3118,7 @@ expand_call (tree exp, rtx target, int ignore)
 		  else
 		    {
 		      argblock = push_block (GEN_INT (needed), 0, 0);
-		      if (ARGS_GROW_DOWNWARD)
+		      if (args_grow_downward)
 			argblock = plus_constant (Pmode, argblock, needed);
 		    }
 
@@ -3146,8 +3198,9 @@ expand_call (tree exp, rtx target, int ignore)
 
       OK_DEFER_POP;
 
-      /* Perform stack alignment before the first push (the last arg).  */
-      if (argblock == 0
+      /* If we push args individually in reverse order, perform stack alignment
+	 before the first push (the last arg).  */
+      if (push_args_reversed && argblock == 0
           && adjusted_args_size.constant > reg_parm_stack_space
 	  && adjusted_args_size.constant != unadjusted_args_size)
 	{
@@ -3196,7 +3249,8 @@ expand_call (tree exp, rtx target, int ignore)
 	 is clobbered by argument setup for this call.  */
       if (ACCUMULATE_OUTGOING_ARGS && pass)
 	save_area = save_fixed_argument_area (reg_parm_stack_space, argblock,
-					      &low_to_save, &high_to_save);
+					      &low_to_save, &high_to_save,
+					      args_grow_downward);
 #endif
 
       /* Now store (and compute if necessary) all non-register parms.
@@ -3228,7 +3282,8 @@ expand_call (tree exp, rtx target, int ignore)
 				 reg_parm_stack_space)
 		  || (pass == 0
 		      && check_sibcall_argument_overlap (before_arg,
-							 &args[i], 1)))
+							 &args[i], 1,
+							 args_grow_downward)))
 		sibcall_failure = 1;
 	      }
 
@@ -3257,7 +3312,7 @@ expand_call (tree exp, rtx target, int ignore)
 	     /* On targets with weird calling conventions (e.g. PA) it's
 		hard to ensure that all cases of argument overlap between
 		stack and registers work.  Play it safe and bail out.  */
-	      if (ARGS_GROW_DOWNWARD && !STACK_GROWS_DOWNWARD)
+	      if (args_grow_downward && !STACK_GROWS_DOWNWARD)
 		{
 		  sibcall_failure = 1;
 		  break;
@@ -3268,7 +3323,8 @@ expand_call (tree exp, rtx target, int ignore)
 				 reg_parm_stack_space)
 		  || (pass == 0
 		      && check_sibcall_argument_overlap (before_arg,
-							 &args[i], 1)))
+							 &args[i], 1,
+							 args_grow_downward)))
 		sibcall_failure = 1;
 	    }
 
@@ -3332,6 +3388,12 @@ expand_call (tree exp, rtx target, int ignore)
 			  : &args[args[i].pointer_arg]);
 	}
 
+      /* If we pushed args in forward order, perform stack alignment
+	 after pushing the last arg.  */
+      if (!push_args_reversed && argblock == 0)
+	anti_adjust_stack (GEN_INT (adjusted_args_size.constant
+				    - unadjusted_args_size));
+
       /* If register arguments require space on the stack and stack space
 	 was not preallocated, allocate stack space here for arguments
 	 passed in registers.  */
@@ -3382,7 +3444,8 @@ expand_call (tree exp, rtx target, int ignore)
       if (pass == 1 && (return_flags & ERF_RETURNS_ARG))
 	{
 	  int arg_nr = return_flags & ERF_RETURN_ARG_MASK;
-	  arg_nr = num_actuals - arg_nr - 1;
+	  if (push_args_reversed)
+	    arg_nr = num_actuals - arg_nr - 1;
 	  if (arg_nr >= 0
 	      && arg_nr < num_actuals
 	      && args[arg_nr].reg
@@ -3425,7 +3488,8 @@ expand_call (tree exp, rtx target, int ignore)
 	 of the argument setup we probably clobbered our call address.
 	 In that case we can't do sibcalls.  */
       if (pass == 0
-	  && check_sibcall_argument_overlap (after_args, 0, 0))
+	  && check_sibcall_argument_overlap (after_args, 0, 0,
+					     args_grow_downward))
 	sibcall_failure = 1;
 
       /* If a non-BLKmode value is returned at the most significant end
@@ -3645,7 +3709,8 @@ expand_call (tree exp, rtx target, int ignore)
 #ifdef REG_PARM_STACK_SPACE
 	  if (save_area)
 	    restore_fixed_argument_area (save_area, argblock,
-					 high_to_save, low_to_save);
+					 high_to_save, low_to_save,
+					 args_grow_downward);
 #endif
 
 	  /* If we saved any argument areas, restore them.  */
@@ -3842,6 +3907,9 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
      isn't present here, so we default to native calling abi here.  */
   tree fndecl ATTRIBUTE_UNUSED = NULL_TREE; /* library calls default to host calling abi ? */
   tree fntype ATTRIBUTE_UNUSED = NULL_TREE; /* library calls default to host calling abi ? */
+  bool push_args_reversed = !! FUNCTION_PUSH_ARGS_REVERSED (fntype);
+  bool args_grow_downward = !! FUNCTION_ARGS_GROW_DOWNWARD (fntype);
+  int inc;
   int count;
   rtx argblock = 0;
   CUMULATIVE_ARGS args_so_far_v;
@@ -4155,7 +4223,7 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
       if (! OUTGOING_REG_PARM_STACK_SPACE ((!fndecl ? fntype : TREE_TYPE (fndecl))))
 	needed += reg_parm_stack_space;
 
-      if (ARGS_GROW_DOWNWARD)
+      if (args_grow_downward)
 	highest_outgoing_arg_in_use = MAX (initial_highest_arg_in_use,
 					   needed + 1);
       else
@@ -4190,13 +4258,22 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 	argblock = push_block (GEN_INT (args_size.constant), 0, 0);
     }
 
-  /* We push args individually in reverse order, perform stack alignment
+  /* If we push args individually in reverse order, perform stack alignment
      before the first push (the last arg).  */
-  if (argblock == 0)
+  if (argblock == 0 && push_args_reversed)
     anti_adjust_stack (GEN_INT (args_size.constant
 				- original_args_size.constant));
 
-  argnum = nargs - 1;
+  if (push_args_reversed)
+    {
+      inc = -1;
+      argnum = nargs - 1;
+    }
+  else
+    {
+      inc = 1;
+      argnum = 0;
+    }
 
 #ifdef REG_PARM_STACK_SPACE
   if (ACCUMULATE_OUTGOING_ARGS)
@@ -4205,7 +4282,8 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 	 may clobber it.  If the fixed area has been used for previous
 	 parameters, we must save and restore it.  */
       save_area = save_fixed_argument_area (reg_parm_stack_space, argblock,
-					    &low_to_save, &high_to_save);
+					    &low_to_save, &high_to_save,
+					    args_grow_downward);
     }
 #endif
 
@@ -4227,7 +4305,7 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 
   /* ARGNUM indexes the ARGVEC array in the order in which the arguments
      are to be pushed.  */
-  for (count = 0; count < nargs; count++, argnum--)
+  for (count = 0; count < nargs; count++, argnum += inc)
     {
       machine_mode mode = argvec[argnum].mode;
       rtx val = argvec[argnum].value;
@@ -4245,7 +4323,7 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 	      /* If this is being stored into a pre-allocated, fixed-size,
 		 stack area, save any previous data at that location.  */
 
-	      if (ARGS_GROW_DOWNWARD)
+	      if (args_grow_downward)
 		{
 		  /* stack_slot is negative, but we want to index stack_usage_map
 		     with positive values.  */
@@ -4305,7 +4383,8 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 			  partial, reg, 0, argblock,
 			  GEN_INT (argvec[argnum].locate.offset.constant),
 			  reg_parm_stack_space,
-			  ARGS_SIZE_RTX (argvec[argnum].locate.alignment_pad), false);
+			  ARGS_SIZE_RTX (argvec[argnum].locate.alignment_pad),
+			  false, push_args_reversed);
 
 	  /* Now mark the segment we just used.  */
 	  if (ACCUMULATE_OUTGOING_ARGS)
@@ -4338,7 +4417,16 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 	}
     }
 
-  argnum = nargs - 1;
+  /* If we pushed args in forward order, perform stack alignment
+     after pushing the last arg.  */
+  if (argblock == 0 && !push_args_reversed)
+    anti_adjust_stack (GEN_INT (args_size.constant
+				- original_args_size.constant));
+
+  if (push_args_reversed)
+    argnum = nargs - 1;
+  else
+    argnum = 0;
 
   fun = prepare_call_address (NULL, fun, NULL, &call_fusage, 0, 0);
 
@@ -4346,7 +4434,7 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 
   /* ARGNUM indexes the ARGVEC array in the order in which the arguments
      are to be pushed.  */
-  for (count = 0; count < nargs; count++, argnum--)
+  for (count = 0; count < nargs; count++, argnum += inc)
     {
       machine_mode mode = argvec[argnum].mode;
       rtx val = argvec[argnum].value;
@@ -4554,7 +4642,8 @@ emit_library_call_value_1 (int retval, rtx orgfun, rtx value,
 #ifdef REG_PARM_STACK_SPACE
       if (save_area)
 	restore_fixed_argument_area (save_area, argblock,
-				     high_to_save, low_to_save);
+				     high_to_save, low_to_save,
+				     args_grow_downward);
 #endif
 
       /* If we saved any argument areas, restore them.  */
@@ -4723,6 +4812,8 @@ store_one_arg (struct arg_data *arg, rtx argblock, int flags,
   int used = 0;
   int i, lower_bound = 0, upper_bound = 0;
   int sibcall_failure = 0;
+  bool push_args_reversed = (flags & ECF_PUSH_ARGS_REVERSED) != 0;
+  bool args_grow_downward = (flags & ECF_ARGS_GROW_DOWNWARD) != 0;
 
   if (TREE_CODE (pval) == ERROR_MARK)
     return 1;
@@ -4737,7 +4828,7 @@ store_one_arg (struct arg_data *arg, rtx argblock, int flags,
 	 save any previous data at that location.  */
       if (argblock && ! variable_size && arg->stack)
 	{
-	  if (ARGS_GROW_DOWNWARD)
+	  if (args_grow_downward)
 	    {
 	      /* stack_slot is negative, but we want to index stack_usage_map
 		 with positive values.  */
@@ -4859,7 +4950,8 @@ store_one_arg (struct arg_data *arg, rtx argblock, int flags,
   if ((flags & ECF_SIBCALL)
       && MEM_P (arg->value)
       && mem_overlaps_already_clobbered_arg_p (XEXP (arg->value, 0),
-					       arg->locate.size.constant))
+					       arg->locate.size.constant,
+					       args_grow_downward))
     sibcall_failure = 1;
 
   /* Don't allow anything left on stack from computation
@@ -4918,7 +5010,8 @@ store_one_arg (struct arg_data *arg, rtx argblock, int flags,
       if (!emit_push_insn (arg->value, arg->mode, TREE_TYPE (pval), NULL_RTX,
 		      parm_align, partial, reg, used - size, argblock,
 		      ARGS_SIZE_RTX (arg->locate.offset), reg_parm_stack_space,
-		      ARGS_SIZE_RTX (arg->locate.alignment_pad), true))
+		      ARGS_SIZE_RTX (arg->locate.alignment_pad), true,
+		      push_args_reversed))
 	sibcall_failure = 1;
 
       /* Unless this is a partially-in-register argument, the argument is now
@@ -5031,7 +5124,8 @@ store_one_arg (struct arg_data *arg, rtx argblock, int flags,
       emit_push_insn (arg->value, arg->mode, TREE_TYPE (pval), size_rtx,
 		      parm_align, partial, reg, excess, argblock,
 		      ARGS_SIZE_RTX (arg->locate.offset), reg_parm_stack_space,
-		      ARGS_SIZE_RTX (arg->locate.alignment_pad), false);
+		      ARGS_SIZE_RTX (arg->locate.alignment_pad), false,
+		      push_args_reversed);
 
       /* Unless this is a partially-in-register argument, the argument is now
 	 in the stack.

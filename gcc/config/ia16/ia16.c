@@ -309,6 +309,8 @@ ia16_get_call_parm_cvt (const_tree type)
 	    return CALL_PARM_CVT_STDCALL;
 	  else if (lookup_attribute ("regparmcall", attrs))
 	    return CALL_PARM_CVT_REGPARMCALL;
+	  else if (lookup_attribute ("pascal", attrs))
+	    return CALL_PARM_CVT_PASCAL;
 	}
     }
 
@@ -324,15 +326,16 @@ ia16_get_call_parm_cvt (const_tree type)
 #define IA16_CALLCVT_CDECL		0x0001
 #define IA16_CALLCVT_STDCALL		0x0002
 #define IA16_CALLCVT_REGPARMCALL	0x0004
-#define IA16_CALLCVT_FAR		0x0008
-#define IA16_CALLCVT_DS_DATA		0x0010
-#define IA16_CALLCVT_SS_DATA		0x0020
-#define IA16_CALLCVT_SAVE_DS		0x0040
-#define IA16_CALLCVT_SAVE_ES		0x0080
-#define IA16_CALLCVT_SAVE_ALL		0x0100
-#define IA16_CALLCVT_INTERRUPT		0x0200
-#define IA16_CALLCVT_NEAR_SECTION	0x0400
-#define IA16_CALLCVT_FAR_SECTION	0x0800
+#define IA16_CALLCVT_PASCAL		0x0008
+#define IA16_CALLCVT_FAR		0x0010
+#define IA16_CALLCVT_DS_DATA		0x0020
+#define IA16_CALLCVT_SS_DATA		0x0040
+#define IA16_CALLCVT_SAVE_DS		0x0080
+#define IA16_CALLCVT_SAVE_ES		0x0100
+#define IA16_CALLCVT_SAVE_ALL		0x0200
+#define IA16_CALLCVT_INTERRUPT		0x0400
+#define IA16_CALLCVT_NEAR_SECTION	0x0800
+#define IA16_CALLCVT_FAR_SECTION	0x1000
 
 static bool ia16_far_function_type_p (const_tree funtype);
 static rtx ia16_seg16_reloc (rtx thang);
@@ -354,6 +357,9 @@ ia16_get_callcvt (const_tree type)
       break;
     case CALL_PARM_CVT_REGPARMCALL:
       callcvt = IA16_CALLCVT_REGPARMCALL;
+      break;
+    case CALL_PARM_CVT_PASCAL:
+      callcvt = IA16_CALLCVT_PASCAL;
       break;
     default:
       gcc_unreachable ();
@@ -775,11 +781,12 @@ ia16_in_far_section_function_p (void)
 
 /* Basic Stack Layout */
 /* Right after the function prologue, before elimination, we have:
-   argument N
-   argument N - 1
+				<-- argument pointer (`pascal')
+   argument N (pascal: 1)
+   argument N - 1 (pascal: 2)
    ...
-   argument 1
-   return address		<-- argument pointer
+   argument 1 (pascal: N)	<-- argument pointer (non-`pascal')
+   return address
    saved reg 1
    saved reg 2
    ...
@@ -790,30 +797,77 @@ ia16_in_far_section_function_p (void)
    function outgoing arguments
 */
 
-/* Calculates the offset from the argument pointer to the first argument.
- * When a frame pointer is needed and bp must be saved, it is saved before the
- * frame is created.  This increases the offset to the parameters by 2 bytes.
- * A __far call would add another 2 bytes.
- * FIXME: Docs: This is called before register allocation.
+/* Say whether successive arguments to a function of type FNTYPE occupy
+ * decreasing stack addresses.
  */
-HOST_WIDE_INT
-ia16_first_parm_offset (tree fundecl)
+int
+ia16_function_args_grow_downward (const_tree fntype)
+{
+  tree attrs;
+
+  if (! fntype)
+    return 0;
+
+  attrs = TYPE_ATTRIBUTES (fntype);
+  return attrs && lookup_attribute ("pascal", attrs);
+}
+
+/* Calculates the difference between the location storing the current
+ * function's return address, and the argument pointer.
+ */
+static HOST_WIDE_INT
+ia16_return_addr_pointer_to_arg_pointer_offset (void)
 {
   /* Start off with 2 bytes to skip over the saved pc register.  */
   HOST_WIDE_INT offset = GET_MODE_SIZE (Pmode);
 
   /*
-   * Add 2 bytes if this is a far function.  Add a further 2 if this is an
-   * interrupt function.
+   * Add 2 bytes (for saved caller %cs) if this is a far function.  Add a
+   * further 2 (for saved flags) if this is an interrupt function.
    */
-  if (ia16_far_function_type_p (TREE_TYPE (fundecl)))
+  if (ia16_in_far_function_p ())
     {
       offset += GET_MODE_SIZE (Pmode);
-      if (ia16_interrupt_function_type_p (TREE_TYPE (fundecl)))
-	offset += GET_MODE_SIZE (Pmode);
+      if (ia16_in_interrupt_function_p ())
+	offset += GET_MODE_SIZE (HImode);
     }
 
-  return (offset);
+  /*
+   * The offset now points to the topmost argument.  For a `pascal'
+   * function, adjust it to point after the bottommost argument.
+   */
+  if (cfun->args_grow_downward && crtl->args.size != -1)
+    offset += crtl->args.size;
+
+  return offset;
+}
+
+/* Return an RTX for the return address for a particular frame.
+ *
+ * Because we have no way of knowing how many registers are saved between the
+ * return address and the frame pointer, we can't find the return address for
+ * count > 0.
+ * TODO: Make this work by pushing the frame pointer before the saved regs
+ * when not using ENTER.
+ *
+ * For count == 0, set a flag so that ia16_save_reg_p (.) will ultimately
+ * arrange to allocate a frame pointer, even if the function does not
+ * otherwise need one.
+ */
+rtx
+ia16_return_addr_rtx (int count, rtx frame)
+{
+  rtx addr;
+
+  if (count != 0)
+    return NULL_RTX;
+
+  crtl->accesses_prior_frames = true;
+
+  addr = plus_constant (Pmode, arg_pointer_rtx,
+			-ia16_return_addr_pointer_to_arg_pointer_offset ());
+  /* FIXME: maybe return a far pointer (SImode) if this is a far function? */
+  return gen_rtx_MEM (Pmode, addr);
 }
 
 /* Eliminating Frame Pointer and Arg Pointer */
@@ -863,7 +917,7 @@ ia16_can_eliminate (const int from, const int to)
 }
 
 /* Calculates the difference between the argument pointer and the frame
- * pointer immediately after the function prologue.  This should be kept int
+ * pointer immediately after the function prologue.  This should be kept in
  * sync with the prologue pattern.
  */
 static HOST_WIDE_INT
@@ -881,6 +935,13 @@ ia16_initial_arg_pointer_offset (void)
   /* Remember to take the flags into account. */
   if (ia16_save_reg_p (CC_REG) && ! ia16_in_interrupt_function_p ())
     offset += GET_MODE_SIZE (HImode);
+
+  /*
+   * The offset now points to the return address.  Add the distance between
+   * the return address pointer and the argument start.
+   */
+  offset += ia16_return_addr_pointer_to_arg_pointer_offset ();
+
   return offset;
 }
 
@@ -1253,10 +1314,11 @@ ia16_return_pops_args (tree fundecl ATTRIBUTE_UNUSED, tree funtype, int size)
 
   switch (ia16_get_callcvt (funtype)
 	  & (IA16_CALLCVT_STDCALL | IA16_CALLCVT_CDECL
-	     | IA16_CALLCVT_REGPARMCALL))
+	     | IA16_CALLCVT_REGPARMCALL | IA16_CALLCVT_PASCAL))
     {
     case IA16_CALLCVT_STDCALL:
     case IA16_CALLCVT_REGPARMCALL:
+    case IA16_CALLCVT_PASCAL:
       return size;
     case IA16_CALLCVT_CDECL:
       return 0;
@@ -1300,9 +1362,10 @@ ia16_handle_cconv_attribute (tree *node, tree name, tree args ATTRIBUTE_UNUSED,
     {
       tree attrs = TYPE_ATTRIBUTES (*node);
       if (attrs && (lookup_attribute ("cdecl", attrs)
-		    || lookup_attribute ("regparmcall", attrs)))
+		    || lookup_attribute ("regparmcall", attrs)
+		    || lookup_attribute ("pascal", attrs)))
 	{
-	  error ("stdcall, cdecl, and regparmcall attributes are "
+	  error ("stdcall, cdecl, regparmcall, and pascal attributes are "
 		 "not compatible");
 	  *no_add_attrs = true;
 	}
@@ -1312,9 +1375,10 @@ ia16_handle_cconv_attribute (tree *node, tree name, tree args ATTRIBUTE_UNUSED,
     {
       tree attrs = TYPE_ATTRIBUTES (*node);
       if (attrs && (lookup_attribute ("stdcall", attrs)
-		    || lookup_attribute ("regparmcall", attrs)))
+		    || lookup_attribute ("regparmcall", attrs)
+		    || lookup_attribute ("pascal", attrs)))
 	{
-	  error ("stdcall, cdecl, and regparmcall attributes are "
+	  error ("stdcall, cdecl, regparmcall, and pascal attributes are "
 		 "not compatible");
 	  *no_add_attrs = true;
 	}
@@ -1324,9 +1388,10 @@ ia16_handle_cconv_attribute (tree *node, tree name, tree args ATTRIBUTE_UNUSED,
     {
       tree attrs = TYPE_ATTRIBUTES (*node);
       if (attrs && (lookup_attribute ("cdecl", attrs)
-		    || lookup_attribute ("stdcall", attrs)))
+		    || lookup_attribute ("stdcall", attrs)
+		    || lookup_attribute ("pascal", attrs)))
 	{
-	  error ("stdcall, cdecl, and regparmcall attributes are "
+	  error ("stdcall, cdecl, regparmcall, and pascal attributes are "
 		 "not compatible");
 	  *no_add_attrs = true;
 	}
@@ -1334,9 +1399,21 @@ ia16_handle_cconv_attribute (tree *node, tree name, tree args ATTRIBUTE_UNUSED,
     }
   else if (is_attribute_p ("pascal", name))
     {
-      error ("unsupported: pascal calling convention");
-      *no_add_attrs = true;
-
+      tree attrs = TYPE_ATTRIBUTES (*node);
+      if (attrs && (lookup_attribute ("cdecl", attrs)
+		    || lookup_attribute ("stdcall", attrs)
+		    || lookup_attribute ("regparmcall", attrs)))
+	{
+	  error ("stdcall, cdecl, regparmcall, and pascal attributes are "
+		 "not compatible");
+	  *no_add_attrs = true;
+	}
+      if (stdarg_p (*node))
+	{
+	  error ("function with %<pascal%> calling convention cannot be "
+		 "variadic");
+	  *no_add_attrs = true;
+	}
       return NULL_TREE;
     }
   else if (is_attribute_p ("assume_ss_data", name))

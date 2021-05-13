@@ -337,24 +337,14 @@ enum reg_class {	/*	 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0 */
 
 #define STACK_GROWS_DOWNWARD 1
 #define FRAME_GROWS_DOWNWARD 1
-#undef  ARGS_GROW_DOWNWARD
+#define FUNCTION_ARGS_GROW_DOWNWARD(funtype) \
+	ia16_function_args_grow_downward (funtype)
 #define STARTING_FRAME_OFFSET 0
-#define FIRST_PARM_OFFSET(fundecl) ia16_first_parm_offset (fundecl)
+#define FIRST_PARM_OFFSET(fundecl) 0
 
-/* Because we have no way of knowing how many registers are saved between the
-   return address and the frame pointer, we can't find the return address for
-   count > 0.
-   TODO: Make this work by pushing the frame pointer before the saved regs
-   when not using ENTER.
+extern int ia16_function_args_grow_downward (const_tree funtype);
 
-   For count == 0, set a flag so that ia16_save_reg_p (.) will ultimately
-   arrange to allocate a frame pointer, even if the function does not
-   otherwise need one.  */
-#define RETURN_ADDR_RTX(COUNT, FRAME)				       	      \
-	((COUNT) == 0							      \
-	 ? crtl->accesses_prior_frames = true,				      \
-	   gen_rtx_MEM (Pmode, arg_pointer_rtx)				      \
-	 : NULL_RTX)
+#define RETURN_ADDR_RTX(COUNT, FRAME) ia16_return_addr_rtx (COUNT, FRAME)				       	      \
 
 /* Exception Handling Support */
 /* XXX needs work.  */
@@ -387,7 +377,6 @@ enum reg_class {	/*	 17 16 15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0 */
 
 /* Passing Function Arguments on the Stack */
 #define PUSH_ARGS		1
-#define PUSH_ARGS_REVERSED	1
 #define PUSH_ROUNDING(BYTES)	(((BYTES) + 1) & ~1)
 
 /* Passing Arguments in Registers */
@@ -710,6 +699,7 @@ enum call_parm_cvt_type
   CALL_PARM_CVT_CDECL,
   CALL_PARM_CVT_STDCALL,
   CALL_PARM_CVT_REGPARMCALL,
+  CALL_PARM_CVT_PASCAL,
   CALL_PARM_CVT_max
 };
 
