@@ -764,8 +764,8 @@ Objective-C and Objective-C++ Dialects}.
 -mrtd -mstdcall -mregparmcall @gol
 -mno-callee-assume-ds-data-segment -mprotected-mode @gol
 -mno-newlib-autofloat-stdio @gol
--melks -melks-libc -mcmodel=medium -mnewlib-nano-stdio @gol
--mdpmiable -msegelf -mno-callee-assume-ss-data-segment -masm=intel @gol
+-mdosx -mdpmi -melks -melks-libc -mcmodel=medium -mnewlib-nano-stdio @gol
+-msegelf -mno-callee-assume-ss-data-segment -masm=intel @gol
 -maout-total=@var{total} -maout-chmem=@var{chmem} @gol
 -mfar-function-if-far-return-type}
 
@@ -16599,7 +16599,8 @@ segment in a @w{64 KiB} address space.  This is the default for MS-DOS.
 @opindex mseparate-code-segment
 Generate code for the small code model, with one data segment and one text
 segment, in separate @w{64 KiB} spaces.  This is now (February 2020) the
-default for ELKS (@option{-melks}).
+default for ELKS (@option{-melks}), and also (February 2022) the default
+for DOS extender mode (@option{-mdosx}).
 @c
 @c Recent versions of ELKS (e.g. 0.3.0) will only run a.out programs marked
 @c "separate I/D", and will no longer run tiny model a.out programs.  Hence
@@ -16624,7 +16625,8 @@ the C library.)
 @opindex mno-segment-relocation-stuff
 Enable (or disable) language features, such as static pointers to far
 variables, that rely on segment relocations to work.  If the small code
-model is used, the default is to allow such language features.
+model or medium code model is used, outside of DOS extender mode
+(@option{-mdosx}), the default is to allow such language features.
 
 @item -mshort-jumps
 @itemx -mno-short-jumps
@@ -16735,8 +16737,11 @@ void foo (unsigned selector)
 @}
 @end smallexample
 
-At the linking stage, @option{-mprotected-mode} will also make GCC link your
-code against library routines that are built to work with protected mode.
+@emph{Note:} if you are writing protected mode code that will run in a
+freestanding environment, it is advised to also specify both
+@option{-mprotected-mode} and @option{-ffreestanding} at link time, so that
+GCC will link your code with a version of @file{libgcc} that can work in
+protected mode.
 
 @item -mno-newlib-autofloat-stdio
 @opindex mno-newlib-autofloat-stdio
@@ -16755,16 +16760,28 @@ If you use this option, specify it at compile time and during the final link.
 @subsubsection Experimental IA-16 Options
 
 @table @gcctabopt
+@item -mdosx
+@itemx -mdpmi
+@opindex mdosx
+@opindex mdpmi
+Produce MS-DOS executables which run under a DOS extender in protected mode.
+The executables will use the DOS Protected Mode Interface (DPMI) to switch
+to protected mode, if they detect a DPMI host.
+
+This option requires support from the linker script which comes with the C
+library.  It implies @option{-mmsdos}, @option{-march=i80286}, and
+@option{-mprotected-mode}, and currently also enables @option{-msegelf}.
+
 @item -melks
+@itemx -melks-libc
 @opindex melks
-@item -melks-libc
 @opindex melks-libc
 Produce executables for the Embeddable Linux Kernel Subset (ELKS) operating
 system.  In addition, link against ELKS's own C runtime library---which must
 be built with GCC, and installed---instead of the Newlib C library.
 
-This option also turns on @option{-mprotected-mode},
-@option{-mcmodel=small}, @option{-msegelf}, and @option{-fuse-ld=gold}.
+This option implies @option{-mprotected-mode} and @option{-mcmodel=small},
+and currently also enables @option{-msegelf} and @option{-fuse-ld=gold}.
 @c
 @c Before December 2019, -melks used to link ELKS programs with an
 @c ELKS-ified Newlib, while -melks-libc would link with elks-libc.  Since,
@@ -16772,7 +16789,7 @@ This option also turns on @option{-mprotected-mode},
 @c programs, I have decided to unify the two options.  -- tkchia
 
 @item -maout-stack=@var{stack-size}
-@item -mstack-size=@var{stack-size}
+@itemx -mstack-size=@var{stack-size}
 @opindex maout-stack
 @opindex mstack-size
 When building an ELKS program (@option{-melks}), set it to request the
@@ -16821,14 +16838,6 @@ If you use this option, specify it at compile time and during the final link.
 This option implies @option{-mmsdos}, and requires support from the linker
 script which comes with the C library.
 
-@item -mdpmiable
-@opindex mdpmiable
-Produce MS-DOS executables which try to use the DOS Protected Mode Interface
-(DPMI) to switch to and run in protected mode when they detect a DPMI host. 
-
-This option implies @option{-mmsdos} and @option{-mprotected-mode}, and
-requires support from the linker script which comes with the C library.
-
 @item -msegelf
 @opindex msegelf
 Generate object files which follow H.@: Peter Anvin's proposed 16-bit
@@ -16853,6 +16862,14 @@ Output assembly instructions using Intel syntax, rather than the default
 AT&T syntax.  This also affects
 which dialect is used for basic @code{asm} (@pxref{Basic Asm}) and
 extended @code{asm} (@pxref{Extended Asm}).
+
+@item -mno-post-link
+@opindex mno-post-link
+After running the linker, skip any post-link steps which may be needed to
+transform the linker output into a usable target executable.  The output
+from @option{-mno-post-link} will likely be an intermediate ELF file.
+
+This switch is mainly for experimentation purposes.
 @end table
 
 @subsubsection Deprecated IA-16 Options
