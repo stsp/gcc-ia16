@@ -48,69 +48,36 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
   "%{mr=elks|mdosx|mseparate-code-segment:%{mcmodel=*:;:-mcmodel=small}}", \
   "%{mcmodel=small|mcmodel=medium:" \
     "%{!mdosx:"		\
-      "%{!mno-segment-relocation-stuff:-msegment-relocation-stuff}}}", \
-  "%{maout-total=*:"	\
-    "%{maout-chmem=*:%emay not use both -maout-total= and -maout-chmem=}" \
-    "%{maout-stack=*:%emay not use both -maout-total= and -maout-stack=}" \
-    "%{maout-heap=*:%emay not use both -maout-total= and -maout-heap=}}", \
-  "%{maout-chmem=*:"	\
-    "%{maout-stack=*:%emay not use both -maout-chmem= and -maout-stack=}" \
-    "%{maout-heap=*:%emay not use both -maout-chmem= and -maout-heap=}}"
+      "%{!mno-segment-relocation-stuff:-msegment-relocation-stuff}}}"
 
 /* 1) Define "reasonable" macros & predicates corresponding to the chosen
-      target operating system.  Do this here rather than in ia16-c.c, so
-      that any r-*.spec file provided by the runtime library can override
-      our settings here, if they need or want to.
+      target operating system.  Do this here rather than in ia16-c.c, so that
+      any r-*.spec file provided by the runtime library can override our
+      settings here, if they need or want to.
 
-   2) The -isystem stuff is a hack.  When -mr=elks is specified, then, combined
-      with the -nostdinc above, this hack will (try to) make GCC use the
-      include files under the -mr=elks multilib directory, rather than the
-      Newlib include files in the usual locations.
-
-      We also need to extend the hack to
-	* rope in the libgcc include directories --- via `include-fixed' ---
-	  since elks-libc's headers use libgcc's;
-	* fall back on the include directories for the default calling
-	  convention (.../ia16-elf/lib/elkslibc/include/), in case the user
-	  says e.g.  `-mr=elks -mregparmcall' and no include files are
-	  installed specifically for this calling convention.
-
-      Again, this is a hack.  -- tkchia  */
+   2) For ELKS, make the libgcc include directories available.  This gives us
+      a kind of "freestanding" build environment from which we can build
+      elks-libc & install proper specs. */
 #define CPP_SPEC	\
   "%{mcmodel=medium:%{,c++|,c++-header:%emedium model not supported for C++}}"\
   "%:cpp-sys-defs(%{mr=*:%*}) " \
   "%{mr=elks:-D__ELKS__ " \
 	    "-isystem include-fixed/../include%s " \
-	    "-isystem include-fixed%s " \
-	    "-isystem include%s " \
-	    "-isystem elkslibc/include%s;" \
+	    "-isystem include-fixed%s;" \
     "mr=msdos:-D__MSDOS__}"
 
 #define ASM_SPEC	\
   "%{msegelf:--32-segelf}"
 
-/* For platforms other than ELKS, our stub built-in specs now only support
-   the building of libgcc, but can no longer link complete programs.  Assume
-   that the C library (e.g. Newlib) will provide runtime specs (r-*.spec)
-   that say how to link programs.
-	-- tkchia 20220528 */
+/* Our stub built-in specs now only support the building of libgcc, but can
+   no longer link complete programs.  Assume that the C library (e.g.
+   Newlib or elks-libc) will provide runtime specs (r-*.spec) that say how
+   to link programs.  -- tkchia 20221207 */
 #define LINK_SPEC	\
-  "%{!T*:"		\
-    "%{mr=elks:"		\
-	"%Telks-%(cmodel_long_ld);" \
-      ":"		\
-	"%eneed runtime-specs from C library to link programs" \
-    "}"			\
-  "} "			\
-  "%{mr=elks:"	\
-    "-m i386elks "	\
-    "%{maout-total=*:--defsym=_total=%*} " \
-    "%{maout-chmem=*:--defsym=_chmem=%*} " \
-    "%{maout-stack=*:--defsym=_stack=%*} " \
-    "%{maout-heap=*:--defsym=_heap=%*}}"
+  "%{!T*:%eneed runtime-specs from C library to link programs}"
 
 #define STARTFILE_SPEC	\
-  "%{mr=elks:-l:crt0.o}"
+  ""
 
 #define ENDFILE_SPEC	\
   ""
@@ -133,17 +100,4 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
 		   "%{mnewlib-autofloat-stdio} %{mno-newlib-autofloat-stdio} "\
 		   "%{mhandle-non-i186} %{mhandle-non-i286} %{maout} " \
 		   "%{maout-total=*} %{maout-chmem=*} %{maout-stack=*} " \
-		   "%{maout-heap=*}" }, \
-  { "cmodel_long_ld", "%{mcmodel=*:%*.ld;:tiny.ld}" }
-
-#define POST_LINK_SPEC	\
-  "%{!mno-post-link:"	\
-    "%{mr=elks:" \
-      "%:if-exists-else(../lib/../bin/elf2elks%s elf2elks) " \
-      "%{v} "		\
-      "%{mcmodel=tiny:--tiny} " \
-      "%{maout-total=*:--total-data %*} " \
-      "%{maout-chmem=*:--chmem %*} " \
-      "%{maout-stack=*:--stack %*} " \
-      "%{maout-heap=*:--heap %*} " \
-      "%{o*:%*} %{!o*:a.out}}}"
+		   "%{maout-heap=*}" }
