@@ -2954,7 +2954,7 @@ ia16_default_address_cost (rtx r1, rtx r2, rtx c, rtx r9 ATTRIBUTE_UNUSED)
 
   /* If r1 == r2, a "movw" instruction is needed.  */
   if (rtx_equal_p (r1, r2))
-     total += IA16_COST (move);
+    total += IA16_COST (move);
 
   return (total);
 }
@@ -3038,6 +3038,27 @@ ia16_i808x_address_cost (rtx r1, rtx r2, rtx c, rtx r9)
 
   if (ia16_seg_override_cost_likely_p (r9, r1, r2))
     cost += C (2);
+
+  return (cost);
+}
+
+/* Return the cost of an address when optimizing for a NEC V30MZ.
+ */
+static int
+ia16_v30mz_address_cost (rtx r1, rtx r2, rtx c, rtx r9 ATTRIBUTE_UNUSED)
+{
+  int cost = 0;
+
+  /* If two registers are required, add one cycle. */
+  if (r1 && r2)
+    cost += C (1);
+
+  if (c)
+    cost += ia16_constant_cost (c, Pmode, MEM);
+
+  /* If r1 == r2, a "movw" instruction is needed.  */
+  if (rtx_equal_p (r1, r2))
+    cost += IA16_COST (move);
 
   return (cost);
 }
@@ -3330,7 +3351,7 @@ static struct processor_costs ia16_nec_v20_costs = {
  */
 static struct processor_costs ia16_nec_v30mz_costs = {
   /* byte_fetch */	1,
-  /* ea_calc */		ia16_default_address_cost,
+  /* ea_calc */		ia16_v30mz_address_cost,
   /* move */		C (1),
   /* imm_load */	{ C (1), C (1) },
   /* imm_store */	{ C (1), C (1) },
