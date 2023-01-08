@@ -763,7 +763,7 @@ Objective-C and Objective-C++ Dialects}.
 -mseparate-code-segment -mno-segment-relocation-stuff -mshort-jumps @gol
 -mrtd -mstdcall -mregparmcall @gol
 -mno-callee-assume-ds-data-segment -mprotected-mode @gol
--mno-newlib-autofloat-stdio -mdosx -mdpmi @gol
+-mno-newlib-autofloat-stdio -mdosx -mdpmi -mdosx32 @gol
 -melks -mr=elks -melks-libc -mr=@var{rt} -mcmodel=medium @gol
 -mnewlib-nano-stdio @gol
 -msegelf -mno-callee-assume-ss-data-segment -masm=intel @gol
@@ -16606,7 +16606,7 @@ segment in a @w{64 KiB} address space.  This is the default for MS-DOS.
 Generate code for the small code model, with one data segment and one text
 segment, in separate @w{64 KiB} spaces.  This is now (February 2020) the
 default for ELKS (@option{-melks}), and also (February 2022) the default
-for DOS extender mode (@option{-mdosx}).
+for DOS extender mode (@option{-mdosx}, @option{-mdosx32}).
 @c
 @c Recent versions of ELKS (e.g. 0.3.0) will only run a.out programs marked
 @c "separate I/D", and will no longer run tiny model a.out programs.  Hence
@@ -16632,7 +16632,8 @@ the C library.)
 Enable (or disable) language features, such as static pointers to far
 variables, that rely on segment relocations to work.  If the small code
 model or medium code model is used, outside of DOS extender mode
-(@option{-mdosx}), the default is to allow such language features.
+(@option{-mdosx}, @option{-mdosx32}), the default is to allow such language
+features.
 
 @item -mshort-jumps
 @itemx -mno-short-jumps
@@ -16777,6 +16778,14 @@ to protected mode, if they detect a DPMI host.
 This option requires support from the linker script which comes with the C
 library.  It implies @option{-mmsdos}, @option{-march=i80286}, and
 @option{-mprotected-mode}, and currently also enables @option{-msegelf}.
+
+@item -mdosx32
+@opindex mdosx32
+Similar to @option{-mdosx}, but the MS-DOS executables will be ``dual mode''
+programs which can operate under both 16- and 32-bit DPMI hosts.  16-bit
+programs will try to start in 32-bit DPMI mode whenever possible.
+
+This switch is mainly for experimentation purposes.
 
 @item -melks
 @itemx -mr=elks

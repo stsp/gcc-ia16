@@ -61,7 +61,7 @@ ia16_cpu_cpp_builtins (void)
   char *defn;
   int rv;
 
-  def_macro ("__ia16__=20221223L");
+  def_macro ("__ia16__=20230108L");
 
   if (have_addr_spaces_p ())
     {
@@ -125,8 +125,9 @@ ia16_cpu_cpp_builtins (void)
   /* Define macros saying whether we are generating code for protected mode
      operation, and for DPMI-able operation.  */
   def_or_undef_macro ("__IA16_FEATURE_PROTECTED_MODE", TARGET_PROTECTED_MODE);
-  def_or_undef_macro ("__IA16_FEATURE_DOSX", TARGET_DOSX);
-  def_or_undef_macro ("__IA16_FEATURE_DPMIABLE", TARGET_DOSX);
+  def_or_undef_macro ("__IA16_FEATURE_DOSX", TARGET_DOSX || TARGET_DOSX32);
+  def_or_undef_macro ("__IA16_FEATURE_DPMIABLE", TARGET_DOSX || TARGET_DOSX32);
+  def_or_undef_macro ("__IA16_FEATURE_DOSX32", TARGET_DOSX32);
 
   /* Define macros for various compiler features:
        * far static variables

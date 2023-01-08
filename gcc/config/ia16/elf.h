@@ -36,6 +36,7 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
   "%:rt-specs-files(rt-specs rt-specs%s %{mr=*:%*})", \
   "%:check-rt-switches(%(ia16_impl_rt_switches) ^ %(ia16_warn_rt_switches) " \
 					       "^ %(rt_switches))", \
+  "%{mdosx32:-mdosx}",	\
   "%{mdosx:"		\
     "%{march=*:;:-march=i80286} " \
     "%{mno-segelf:;:-msegelf}}", \
@@ -85,8 +86,8 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
 /* If present, the r-*.spec runtime-specific specs file should (re)define
    %(ia16_impl_rt_switches) to cover only the runtime-specific switches that
    are recognized & handled by the r-*.spec file.  For example, it is highly
-   unlikely that a non-DOS target platform will be able to handle a -mdosx
-   switch.
+   unlikely that a non-MS-DOS target platform will be able to handle a
+   -mdosx switch.
 
    The gcc-ia16 driver flags an error if it sees any runtime-specific
    switches that the specs file does not know about.
@@ -98,6 +99,7 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
   { "ia16_warn_rt_switches", "" }, \
   { "rt_switches", "%{mmsdos-handle-v1} %{mnewlib-nano-stdio} " \
 		   "%{mnewlib-autofloat-stdio} %{mno-newlib-autofloat-stdio} "\
-		   "%{mhandle-non-i186} %{mhandle-non-i286} %{maout} " \
-		   "%{maout-total=*} %{maout-chmem=*} %{maout-stack=*} " \
-		   "%{maout-heap=*}" }
+		   "%{mhandle-non-i186} %{mhandle-non-i286} " \
+		   "%{mdosx} %{mdosx32} " \
+		   "%{maout} %{maout-total=*} %{maout-chmem=*} " \
+		   "%{maout-stack=*} %{maout-heap=*}" }

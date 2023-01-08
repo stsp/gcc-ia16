@@ -221,6 +221,10 @@ mdpmi
 Target Alias(mdosx)
 Generate MS-DOS executables which run under a DOS extender (experimental).
 
+mdosx32
+Target Report Mask(DOSX32)
+Generate MS-DOS executables which run under a DOS extender; prefer 32-bit DPMI mode (experimental).
+
 msegelf
 Target Report Mask(ABI_SEGELF)
 Use H. Peter Anvin's proposed 16-bit segmented code ABI (experimental).
