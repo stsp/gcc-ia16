@@ -11716,6 +11716,11 @@ gimplify_function_tree (tree fndecl)
       tree tmp_var;
       gcall *call;
 
+      if (flag_instrument_function_entry_exit_simple) {
+        x = builtin_decl_implicit (BUILT_IN_PROFILE_FUNC_EXIT);
+        call = gimple_build_call (x, 0);
+        gimplify_seq_add_stmt (&cleanup, call);
+      } else {
       x = builtin_decl_implicit (BUILT_IN_RETURN_ADDRESS);
       call = gimple_build_call (x, 1, integer_zero_node);
       tmp_var = create_tmp_var (ptr_type_node, "return_addr");
@@ -11726,8 +11731,15 @@ gimplify_function_tree (tree fndecl)
 				build_fold_addr_expr (current_function_decl),
 				tmp_var);
       gimplify_seq_add_stmt (&cleanup, call);
+      }
+
       tf = gimple_build_try (seq, cleanup, GIMPLE_TRY_FINALLY);
 
+      if (flag_instrument_function_entry_exit_simple) {
+        x = builtin_decl_implicit (BUILT_IN_PROFILE_FUNC_ENTER);
+        call = gimple_build_call (x, 0);
+        gimplify_seq_add_stmt (&body, call);
+      } else {
       x = builtin_decl_implicit (BUILT_IN_RETURN_ADDRESS);
       call = gimple_build_call (x, 1, integer_zero_node);
       tmp_var = create_tmp_var (ptr_type_node, "return_addr");
@@ -11738,6 +11750,8 @@ gimplify_function_tree (tree fndecl)
 				build_fold_addr_expr (current_function_decl),
 				tmp_var);
       gimplify_seq_add_stmt (&body, call);
+      }
+
       gimplify_seq_add_stmt (&body, tf);
       new_bind = gimple_build_bind (NULL, body, gimple_bind_block (bind));
       /* Clear the block for BIND, since it is no longer directly inside

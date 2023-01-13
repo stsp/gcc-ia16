@@ -1520,6 +1520,10 @@ finstrument-functions
 Common Report Var(flag_instrument_function_entry_exit)
 Instrument function entry and exit with profiling calls.
 
+finstrument-functions-simple
+Common Report Var(flag_instrument_function_entry_exit_simple)
+Don't generate code to push arguments to instrument profiling functions.
+
 finstrument-functions-exclude-function-list=
 Common RejectNegative Joined
 -finstrument-functions-exclude-function-list=name,...  Do not instrument listed functions.
