@@ -38,6 +38,8 @@ enum libfunc_index
 
   LTI_profile_function_entry,
   LTI_profile_function_exit,
+  LTI_profile_function_entry_simple,
+  LTI_profile_function_exit_simple,
 
   LTI_synchronize,
 
@@ -102,8 +104,10 @@ extern struct target_libfuncs *this_target_libfuncs;
 #define unwind_sjlj_unregister_libfunc \
   (libfunc_table[LTI_unwind_sjlj_unregister])
 
-#define profile_function_entry_libfunc	(libfunc_table[LTI_profile_function_entry])
-#define profile_function_exit_libfunc	(libfunc_table[LTI_profile_function_exit])
+#define profile_function_entry_libfunc		(libfunc_table[LTI_profile_function_entry])
+#define profile_function_exit_libfunc		(libfunc_table[LTI_profile_function_exit])
+#define profile_function_entry_libfunc_simple	(libfunc_table[LTI_profile_function_entry_simple])
+#define profile_function_exit_libfunc_simple	(libfunc_table[LTI_profile_function_exit_simple])
 
 #define synchronize_libfunc	(libfunc_table[LTI_synchronize])
 

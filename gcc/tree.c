@@ -10540,6 +10540,20 @@ build_common_builtin_nodes (void)
 			      "__cyg_profile_func_exit", 0);
     }
 
+  if (!builtin_decl_explicit_p (BUILT_IN_PROFILE_FUNC_ENTER_SIMPLE)
+      || !builtin_decl_explicit_p (BUILT_IN_PROFILE_FUNC_EXIT_SIMPLE))
+    {
+      ftype = build_function_type (void_type_node, void_list_node);
+      if (!builtin_decl_explicit_p (BUILT_IN_PROFILE_FUNC_ENTER_SIMPLE))
+	local_define_builtin ("__cyg_profile_func_enter_simple", ftype,
+			      BUILT_IN_PROFILE_FUNC_ENTER_SIMPLE,
+			      "__cyg_profile_func_enter_simple", 0);
+      if (!builtin_decl_explicit_p (BUILT_IN_PROFILE_FUNC_EXIT_SIMPLE))
+	local_define_builtin ("__cyg_profile_func_exit_simple", ftype,
+			      BUILT_IN_PROFILE_FUNC_EXIT_SIMPLE,
+			      "__cyg_profile_func_exit_simple", 0);
+    }
+
   /* The exception object and filter values from the runtime.  The argument
      must be zero before exception lowering, i.e. from the front end.  After
      exception lowering, it will be the region number for the exception

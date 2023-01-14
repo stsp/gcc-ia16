@@ -1516,13 +1516,13 @@ finline-atomics
 Common Report Var(flag_inline_atomics) Init(1) Optimization
 Inline __atomic operations when a lock free instruction sequence is available.
 
-finstrument-functions
-Common Report Var(flag_instrument_function_entry_exit)
-Instrument function entry and exit with profiling calls.
-
 finstrument-functions-simple
 Common Report Var(flag_instrument_function_entry_exit_simple)
-Don't generate code to push arguments to instrument profiling functions.
+Instrument function entry and exit with profiling calls, without passing arguments.
+
+finstrument-functions
+Common Report Var(flag_instrument_function_entry_exit) EnabledBy(finstrument-functions-simple)
+Instrument function entry and exit with profiling calls.
 
 finstrument-functions-exclude-function-list=
 Common RejectNegative Joined

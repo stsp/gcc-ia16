@@ -910,6 +910,10 @@ init_optabs (void)
     = init_one_libfunc ("__cyg_profile_func_enter");
   profile_function_exit_libfunc
     = init_one_libfunc ("__cyg_profile_func_exit");
+  profile_function_entry_libfunc_simple
+    = init_one_libfunc ("__cyg_profile_func_enter_simple");
+  profile_function_exit_libfunc_simple
+    = init_one_libfunc ("__cyg_profile_func_exit_simple");
 
   gcov_flush_libfunc = init_one_libfunc ("__gcov_flush");
 
