@@ -102,4 +102,4 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
 		   "%{mhandle-non-i186} %{mhandle-non-i286} " \
 		   "%{mdosx} %{mdosx32} " \
 		   "%{maout} %{maout-total=*} %{maout-chmem=*} " \
-		   "%{maout-stack=*} %{maout-heap=*}" }
+		   "%{maout-stack=*} %{maout-heap=*} %{maout-symtab}" }
