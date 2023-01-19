@@ -64,7 +64,8 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
   "%:cpp-sys-defs(%{mr=*:%*}) " \
   "%{mr=elks:-D__ELKS__ " \
 	    "-isystem include-fixed/../include%s " \
-	    "-isystem include-fixed%s;" \
+	    "-isystem include-fixed%s " \
+	    "-isystem elkslibc/include%s;" \
     "mr=msdos:-D__MSDOS__}"
 
 #define ASM_SPEC	\
