@@ -29,7 +29,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 __lshrsi3:
 #ifndef __IA16_CMODEL_IS_FAR_TEXT
 # ifdef __IA16_CALLCVT_CDECL
-#   ifdef __OPTIMIZE_SIZE__
+#  if defined __OPTIMIZE_SIZE__ || defined __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
 	popw	%bx
 	popw	%ax
 	popw	%dx
@@ -38,12 +38,12 @@ __lshrsi3:
 	pushw	%dx
 	pushw	%ax
 	pushw	%bx
-#   else
+#  else
 	movw	%sp,	%bx
 	movw	2(%bx),	%ax
 	movw	4(%bx),	%dx
 	movb	6(%bx),	%cl
-#   endif
+#  endif
 # elif defined __IA16_CALLCVT_STDCALL
 	popw	%bx
 	popw	%ax
@@ -54,16 +54,27 @@ __lshrsi3:
 #else
 # ifdef __IA16_CALLCVT_CDECL
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	movw	%ss:4(%bx),	%ax
+	movw	%ss:6(%bx),	%dx
+	movb	%ss:8(%bx),	%cl
+#  else
 	movw	4(%bx),	%ax
 	movw	6(%bx),	%dx
 	movb	8(%bx),	%cl
+#   endif
 # elif defined __IA16_CALLCVT_STDCALL
 	popw	%dx
 	popw	%cx
 	popw	%ax
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	xchgw	%dx,	%ss:(%bx)
+	xchgw	%cx,	%ss:2(%bx)
+#  else
 	xchgw	%dx,	(%bx)
 	xchgw	%cx,	2(%bx)
+#  endif
 # endif
 #endif
 	andw	$0x1f,	%cx
