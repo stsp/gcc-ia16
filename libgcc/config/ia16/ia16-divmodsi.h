@@ -45,22 +45,37 @@ __modsi3:
 #ifndef __IA16_CMODEL_IS_FAR_TEXT
 # if defined __IA16_CALLCVT_CDECL
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	movw	%ss:2(%bx),	%ax
+	movw	%ss:4(%bx),	%dx
+	movw	%ss:8(%bx),	%cx
+	movw	%ss:6(%bx),	%bx
+#  else
 	movw	2(%bx),	%ax
 	movw	4(%bx),	%dx
 	movw	8(%bx),	%cx
 	movw	6(%bx),	%bx
+#  endif
 # elif defined __IA16_CALLCVT_STDCALL
 	/* Pop arguments but "push" the return address back.  */
 	popw	%cx
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	xchgw	%cx,	%ss:6(%bx)
+#  else
 	xchgw	%cx,	6(%bx)
+#  endif
 	popw	%ax
 	popw	%dx
 	popw	%bx
 # elif defined __IA16_CALLCVT_REGPARMCALL
 	popw	%cx
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	xchgw	%cx,	%ss:2(%bx)
+#  else
 	xchgw	%cx,	2(%bx)
+#  endif
 	popw	%bx
 # else
 #   error "unknown calling convention!"
@@ -84,14 +99,26 @@ __modsi3:
 #else
 # if defined __IA16_CALLCVT_CDECL || defined __IA16_CALLCVT_STDCALL
 	movw	%sp,	%bx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	movw	%ss:4(%bx),	%ax
+	movw	%ss:6(%bx),	%dx
+	movw	%ss:10(%bx),	%cx
+	movw	%ss:8(%bx),	%bx
+#  else
 	movw	4(%bx),	%ax
 	movw	6(%bx),	%dx
 	movw	10(%bx), %cx
 	movw	8(%bx),	%bx
+#  endif
 # elif defined __IA16_CALLCVT_REGPARMCALL
 	movw	%sp,	%bx
-	movw	6(%bx), %cx
+#  ifdef __IA16_FEATURE_ATTRIBUTE_NO_ASSUME_SS_DATA
+	movw	%ss:6(%bx),	%cx
+	movw	%ss:4(%bx),	%bx
+#  else
+	movw	6(%bx),	%cx
 	movw	4(%bx),	%bx
+#  endif
 # else
 #   error "unknown calling convention!"
 # endif
