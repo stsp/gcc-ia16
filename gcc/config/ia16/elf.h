@@ -61,6 +61,8 @@ extern const char *cpp_sys_defs_spec_function (int, const char **);
       elks-libc & install proper specs. */
 #define CPP_SPEC	\
   "%{mcmodel=medium:%{,c++|,c++-header:%emedium model not supported for C++}}"\
+  "%{mno-callee-assume-ss-data-segment:" \
+    "%{,c++|,c++-header:%e%ss != .data not supported for C++}}" \
   "%:cpp-sys-defs(%{mr=*:%*}) " \
   "%{mr=elks:-D__ELKS__ " \
 	    "-isystem include-fixed/../include%s " \
