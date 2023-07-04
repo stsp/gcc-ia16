@@ -21,6 +21,8 @@
 #include "system.h"
 #include "coretypes.h"
 #include "diagnostic-core.h"
+#include "hosthooks.h"
+#include "hosthooks-def.h"
 #include "config/host-darwin.h"
 
 /* Yes, this is really supposed to work.  */
@@ -75,3 +77,5 @@ darwin_gt_pch_use_address (void *addr, size_t sz, int fd, size_t off)
 
   return ret;
 }
+
+const struct host_hooks host_hooks = HOST_HOOKS_INITIALIZER;
