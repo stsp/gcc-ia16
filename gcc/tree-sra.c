@@ -912,6 +912,14 @@ create_access (tree expr, gimple *stmt, bool write)
 	  disqualify_candidate (base, "Encountered a bit-field access.");
 	  return NULL;
 	}
+#ifdef TARGET_ADDR_SPACE_WEIRD_P
+      /* https://github.com/tkchia/gcc-ia16/issues/144 */
+      if (TARGET_ADDR_SPACE_WEIRD_P (TYPE_ADDR_SPACE (TREE_TYPE (expr))))
+	{
+	  disqualify_candidate (base, "Encountered a weird address space.");
+	  return NULL;
+	}
+#endif
       gcc_checking_assert ((offset % BITS_PER_UNIT) == 0);
 
       if (ptr)
