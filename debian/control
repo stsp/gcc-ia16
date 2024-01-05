@@ -1,0 +1,27 @@
+Source: gcc-ia16-elf
+Section: devel
+Priority: optional
+Maintainer: TK Chia <tkchia@gmx.com>
+Build-Depends: debhelper (>=9), binutils-ia16-elf (>= 2.39-20230531.20),
+ libnewlib-ia16-elf (>= 2.4.0-20230704.18-stage1gcc6.3.0-20231009.22-binutils2.39-20230531.20), autotools-dev, gcc (>= 4), g++ (>= 4),
+ libc6-dev, texinfo, bison, flex, libisl-dev (>= 0.14), libmpc-dev (>= 0.8.1),
+ libmpfr-dev (>= 2.4.2), libgmp-dev (>= 4.3.2), gettext, dejagnu, quilt,
+ python3:any, file, lsb-release, zlib1g-dev
+Standards-Version: 3.9.6
+Homepage: https://github.com/tkchia/gcc-ia16
+Vcs-Git: https://github.com/tkchia/gcc-ia16.git
+
+Package: gcc-ia16-elf
+Architecture: any
+Depends: binutils-ia16-elf (>= 2.39-20230531.20),
+ libnewlib-ia16-elf (>= 2.4.0-20230704.18-stage1gcc6.3.0-20231009.22-binutils2.39-20230531.20), ${shlibs:Depends}, ${misc:Depends}
+Suggests: libi86-ia16-elf (>= 20230812-stage1gcc6.3.0-20231009.22-binutils2.39-20230531.20)
+Description: GNU C and C++ compilers for ia16-elf target
+ Unofficial port of the GNU C and C++ compilers to the ia16-elf target ---
+ for 16-bit Intel x86 CPUs, using ELF objects internally, and producing
+ MS-DOS executables --- by Rask Ingemann Lambertsen, Andrew Jenner, and
+ various other contributors.
+ .
+ This is based on the sources of Jenner et al.'s toolchain for IA-16 (see
+ https://sourcery.mentor.com/GNUToolchain/subscription57091?cmpid=11885,
+ https://github.com/tkchia/build-ia16/, https://github.com/tkchia/gcc-ia16).
