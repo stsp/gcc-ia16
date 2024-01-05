@@ -1,5 +1,5 @@
-gcc-ia16-elf (6.3.0-20231009.22-ppa231012185~lunar) lunar; urgency=medium
+gcc-bootstraps-ia16-elf (6.3.0-20231009.22-ppa231012170~focal) focal; urgency=medium
 
   * Release.
 
- -- user <user@localhost.localdomain>  Thu, 12 Oct 2023 18:52:43 +0000
+ -- user <user@localhost.localdomain>  Thu, 12 Oct 2023 17:03:33 +0000

@@ -1,9 +1,6 @@
 #!/usr/bin/make -f
 
 export DH_VERBOSE = 1
-export DEB_CFLAGS_APPEND += 
-export DEB_LDFLAGS_APPEND += 
-DESTDIR ?= $(abspath debian/gcc-ia16-elf)
 
 %:
 	exec dh $@ --parallel --builddirectory=build
@@ -12,35 +9,23 @@ override_dh_update_autotools_config:
 	# Nope, do not touch config.sub or config.guess .
 
 override_dh_auto_configure:
-	# See redist-ppa.sh .
 	exec dh_auto_configure -O--parallel -- \
 	    --target=ia16-elf --infodir=/usr/ia16-elf/info \
-	    --enable-libssp --disable-libquadmath --enable-languages=c,c++ \
-	    --with-newlib --disable-libstdcxx-dual-abi \
-	    --disable-extern-template --disable-wchar_t \
-	    --disable-libstdcxx-verbose --enable-shared
+	    --without-headers --with-newlib --enable-languages=c,c++ \
+	    --disable-libssp --disable-libquadmath --disable-libstdcxx
 
 override_dh_auto_build-arch:
-	dh_auto_build -a -O--parallel -O--builddirectory=build || \
-	    (cat build/ia16-elf/libgcc/config.log && exit 1)
+	dh_auto_build -a -O--parallel -O--builddirectory=build
 	# See redist-ppa.sh .
 	mkdir -p build/gcc/include-fixed
 	cp gcc/glimits.h build/gcc/include-fixed/limits.h
 	echo timestamp >build/gcc/stmp-fixinc
 
 override_dh_auto_test:
-	# To be implemented...
+	# Do not run the test suite at this stage.
 
 override_dh_strip:
 	# Stock GNU Binutils's strip(1) will fail on the new (September
 	# 2019) libgcc2, as it does not understand the IA16-specific segment
 	# relocations.
 	dh_strip -X.a
-
-override_dh_installman:
-	dh_installman -O--parallel -O--builddirectory=build
-	# Add "extensions" to the names of the section 7 man pages so that
-	# they do not clash with the same man pages from other GCC ports.
-	set -e -x; \
-	for pg in '$(DESTDIR)'/usr/share/man/man7/*.7*; \
-		do mv "$$pg" "`echo "$$pg" | sed 's/\.7/.7gcc-ia16/'`"; done
